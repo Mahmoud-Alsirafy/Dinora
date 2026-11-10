@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('cate_id')->constrained('categoies', 'id')->cascadeOnDelete();
             $table->string('name');
             $table->string('slug')->unique();
-            $table->string('description');
+            $table->text('description');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
