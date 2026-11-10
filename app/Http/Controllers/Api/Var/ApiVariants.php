@@ -16,12 +16,15 @@ class ApiVariants extends Controller
             ->active()
             ->with('prices')
             ->firstOrFail();
-
-        $price = $variant->prices->firstWhere('customer_type', $type);
-
+        if ($type !== 'admin') {
+            $price = $variant->prices->firstWhere('customer_type', $type);
+        } else {
+            $price = $variant->prices;
+        }
         return response()->json([
             'variant' => $variant->makeHidden('prices'),
-            'price' => $price
+            'price' => $price,
+            'type' => $type,
         ], 200);
     }
 }
