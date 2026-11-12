@@ -1,9 +1,10 @@
 <?php
 
-use App\Http\Controllers\Api\Var\ApiVariants;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\Cart\ApiCart;
 use App\Http\Controllers\Api\Cate\Categories;
 use App\Http\Controllers\Api\Prod\ApiProducts;
+use App\Http\Controllers\Api\Var\ApiVariants;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,10 +20,13 @@ Route::get('/products/{id}', [ApiProducts::class, 'get']);
 Route::get('/product/{slug}', [ApiProducts::class, 'show']);
 Route::get('/variant/{sku}', [ApiVariants::class, 'show']);
 
+Route::get('/cart', [ApiCart::class, 'index']);
+Route::post('/cart/store_item', [ApiCart::class, 'store_item']);
+
 // !!Routes For Authanticated Users
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        // return $request->user();
     });
 });
