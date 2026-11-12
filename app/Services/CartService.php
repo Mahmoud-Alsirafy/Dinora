@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -21,13 +22,18 @@ class CartService
 
     public function getCart(Request $request)
     {
-        if ($this->user_type == 'guest') {
+        $user = $request->user('sanctum');
+
+        if ($user) {
+            $this->cache_key = "cart_user_{$user->id}";
+            $this->cart_token = null;
+        } else {
             $this->cart_token = $request->header('X-Cart-Token') ?? Str::uuid()->toString();
             $this->cache_key = "cart_guest_{$this->cart_token}";
-        } else {
-            $this->cache_key = "cart_user_{$this->user?->id}";
         }
-        $cart =  Cache::get($this->cache_key, []);
+
+        $cart = Cache::get($this->cache_key, []);
+
         return [
             'cart' => $cart,
             'cart_token' => $this->cart_token,
@@ -61,5 +67,39 @@ class CartService
         Cache::put($this->cache_key, $cart, now()->addDays(30));
 
         return $this->getCart($request);
+    }
+
+    public function mergeCart(Request $request, User $user)
+    {
+        $cart_token = $request->header('X-Cart-Token');
+
+        if (empty($cart_token)) {
+            return;
+        }
+
+        $user_key = "cart_user_{$user->id}";
+        $guest_key = "cart_guest_{$cart_token}";
+
+
+
+        $user_cart = Cache::get($user_key, []);
+        $guest_cart = Cache::get($guest_key, []);
+        if (empty($guest_cart)) {
+            return;
+        }
+
+        foreach ($guest_cart as $key => $value) {
+            if (isset($user_cart[$key])) {
+                $user_cart[$key]['quantity'] += $value['quantity'];
+            } else {
+                $user_cart[$key] = $value;
+            }
+        }
+        $store_cache = Cache::put($user_key, $user_cart, now()->addDays(30));
+        if ($store_cache) {
+            Cache::forget($guest_key);
+        }
+
+        return $store_cache;
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\AuthRequest;
 use App\Models\User;
+use App\Services\CartService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -13,8 +14,11 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-
-
+    private $cartService;
+    public function __construct(CartService $cart)
+    {
+        $this->cartService = $cart;
+    }
     public function register(AuthRequest $request)
     {
         DB::beginTransaction();
@@ -71,8 +75,11 @@ class AuthController extends Controller
         }
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        $mergeCart = $this->cartService->mergeCart($request, $user);
+
         return response()->json([
             'message' => 'Login successful',
+            'Merge Cart' => $mergeCart,
             'user' => $user,
             'token' => $token,
         ], 200);
