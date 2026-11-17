@@ -3,103 +3,217 @@
 namespace App\Services;
 
 use App\Models\User;
+use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class CartService
 {
-    private $user, $user_type, $cache_key, $cart_token = null;
-    /**
-     * Create a new class instance.
-     */
-    public function __construct()
-    {
-        $this->user = Auth::user();
-        $this->user_type = $this->user?->type ?? 'guest';
-    }
+    private const CART_TTL = 30;
+    private const LOCK_TTL = 30;
+    private const LOCK_WAIT = 5;
 
-    public function getCart(Request $request)
+    private function resolveCart(Request $request, bool $createToken = false): array
     {
         $user = $request->user('sanctum');
 
         if ($user) {
-            $this->cache_key = "cart_user_{$user->id}";
-            $this->cart_token = null;
-        } else {
-            $this->cart_token = $request->header('X-Cart-Token') ?? Str::uuid()->toString();
-            $this->cache_key = "cart_guest_{$this->cart_token}";
+            return [
+                'cache_key' => "cart_user_{$user->id}",
+                'cart_token' => null,
+            ];
         }
 
-        $cart = Cache::get($this->cache_key, []);
+        $cartToken = $request->header('X-Cart-Token');
+
+        if (empty($cartToken) && $createToken) {
+            $cartToken = Str::uuid()->toString();
+        }
+
+        if (empty($cartToken)) {
+            abort(400, 'X-Cart-Token is required');
+        }
+
+        return [
+            'cache_key' => "cart_guest_{$cartToken}",
+            'cart_token' => $cartToken,
+        ];
+    }
+
+    private function withCartLocks(array $cacheKeys, Closure $callback)
+    {
+        $cacheKeys = array_unique($cacheKeys);
+        sort($cacheKeys);
+
+        $locks = [];
+
+        try {
+            foreach ($cacheKeys as $key) {
+                $lock = Cache::lock(
+                    "{$key}:lock",
+                    self::LOCK_TTL
+                );
+
+                $lock->block(self::LOCK_WAIT);
+
+                $locks[] = $lock;
+            }
+
+            return $callback();
+        } finally {
+            foreach (array_reverse($locks) as $lock) {
+                $lock->release();
+            }
+        }
+    }
+
+    public function getCart(Request $request)
+    {
+        $context = $this->resolveCart($request, true);
+
+        $cart = Cache::get($context['cache_key'], []);
 
         return [
             'cart' => $cart,
-            'cart_token' => $this->cart_token,
+            'cart_token' => $context['cart_token'],
         ];
     }
 
     public function addItem(Request $request)
     {
+        $validated = $request->validate([
+            'variant_id' => 'required|integer|exists:product_variants,id',
+            'quantity' => 'required|integer|min:1',
+        ]);
 
-        $data = $this->getCart($request);
-        $cart = $data['cart'];
+        $context = $this->resolveCart($request, true);
 
-        // dd([
-        //     'cache_key' => $this->cache_key,
-        //     'cart_token' => $data['cart_token'],
-        //     'cart' => $cart,
-        // ]);
+        $cacheKey = $context['cache_key'];
 
-        $variantId = $request->input('variant_id');
-        $quantity = $request->input('quantity');
+        return $this->withCartLocks(
+            [$cacheKey],
+            function () use ($cacheKey, $context, $validated) {
 
-        if (isset($cart[$variantId])) {
-            $cart[$variantId]['quantity'] += $quantity;
-        } else {
-            $cart[$variantId] = [
-                'variant_id' => $variantId,
-                'quantity' => $quantity,
-            ];
-        }
+                $cart = Cache::get($cacheKey, []);
 
-        Cache::put($this->cache_key, $cart, now()->addDays(30));
+                $variantId = $validated['variant_id'];
+                $quantity = $validated['quantity'];
 
-        return $this->getCart($request);
+                if (isset($cart[$variantId])) {
+                    $cart[$variantId]['quantity'] += $quantity;
+                } else {
+                    $cart[$variantId] = [
+                        'variant_id' => $variantId,
+                        'quantity' => $quantity,
+                    ];
+                }
+
+                $saved = Cache::put(
+                    $cacheKey,
+                    $cart,
+                    now()->addDays(self::CART_TTL)
+                );
+
+                if (!$saved) {
+                    throw new \RuntimeException('Failed to save cart');
+                }
+
+                return [
+                    'cart' => $cart,
+                    'cart_token' => $context['cart_token'],
+                ];
+            }
+        );
+    }
+
+    public function updateItem(Request $request)
+    {
+        $validated = $request->validate([
+            'item_id' => 'required|integer|exists:product_variants,id',
+            'quantity' => 'required|integer|min:1',
+        ]);
+
+        $context = $this->resolveCart($request);
+
+        $cacheKey = $context['cache_key'];
+
+        return $this->withCartLocks(
+            [$cacheKey],
+            function () use ($cacheKey, $context, $validated) {
+
+                $cart = Cache::get($cacheKey, []);
+
+                $itemId = $validated['item_id'];
+
+                if (!isset($cart[$itemId])) {
+                    abort(404, 'Item not found in cart');
+                }
+
+                $cart[$itemId]['quantity'] = $validated['quantity'];
+
+                $saved = Cache::put(
+                    $cacheKey,
+                    $cart,
+                    now()->addDays(self::CART_TTL)
+                );
+
+                if (!$saved) {
+                    throw new \RuntimeException('Failed to update cart');
+                }
+
+                return [
+                    'cart' => $cart,
+                    'cart_token' => $context['cart_token'],
+                ];
+            }
+        );
     }
 
     public function mergeCart(Request $request, User $user)
     {
-        $cart_token = $request->header('X-Cart-Token');
+        $cartToken = $request->header('X-Cart-Token');
 
-        if (empty($cart_token)) {
-            return;
+        if (empty($cartToken)) {
+            return false;
         }
 
-        $user_key = "cart_user_{$user->id}";
-        $guest_key = "cart_guest_{$cart_token}";
+        $userKey = "cart_user_{$user->id}";
+        $guestKey = "cart_guest_{$cartToken}";
 
+        return $this->withCartLocks(
+            [$userKey, $guestKey],
+            function () use ($userKey, $guestKey) {
 
+                $userCart = Cache::get($userKey, []);
+                $guestCart = Cache::get($guestKey, []);
 
-        $user_cart = Cache::get($user_key, []);
-        $guest_cart = Cache::get($guest_key, []);
-        if (empty($guest_cart)) {
-            return;
-        }
+                if (empty($guestCart)) {
+                    return false;
+                }
 
-        foreach ($guest_cart as $key => $value) {
-            if (isset($user_cart[$key])) {
-                $user_cart[$key]['quantity'] += $value['quantity'];
-            } else {
-                $user_cart[$key] = $value;
+                foreach ($guestCart as $key => $value) {
+                    if (isset($userCart[$key])) {
+                        $userCart[$key]['quantity'] += $value['quantity'];
+                    } else {
+                        $userCart[$key] = $value;
+                    }
+                }
+
+                $saved = Cache::put(
+                    $userKey,
+                    $userCart,
+                    now()->addDays(self::CART_TTL)
+                );
+
+                if (!$saved) {
+                    throw new \RuntimeException('Failed to merge carts');
+                }
+
+                Cache::forget($guestKey);
+
+                return true;
             }
-        }
-        $store_cache = Cache::put($user_key, $user_cart, now()->addDays(30));
-        if ($store_cache) {
-            Cache::forget($guest_key);
-        }
-
-        return $store_cache;
+        );
     }
 }

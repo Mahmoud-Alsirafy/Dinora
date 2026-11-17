@@ -19,7 +19,6 @@ class ApiCart extends Controller
         $response = response()->json([
             'data' => $data,
             'message' => 'Cart retrieved successfully',
-            'status' => 200,
         ], 200);
 
         if (!empty($data['cart_token'])) {
@@ -38,7 +37,15 @@ class ApiCart extends Controller
         return response()->json([
             'data' => $data,
             'message' => 'Item added to cart successfully',
-            'status' => 200,
+        ], 200);
+    }
+
+    public function cart_update(Request $request)
+    {
+        $data = $this->cartService->updateItem($request);
+        return response()->json([
+            'data' => $data,
+            'message' => 'Item updated to cart successfully',
         ], 200);
     }
 }
