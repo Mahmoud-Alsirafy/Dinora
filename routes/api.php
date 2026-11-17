@@ -22,7 +22,7 @@ Route::get('/variant/{sku}', [ApiVariants::class, 'show']);
 
 Route::get('/cart', [ApiCart::class, 'index']);
 Route::post('/cart/store_item', [ApiCart::class, 'store_item']);
-Route::post('/cart/cart_update', [ApiCart::class, 'cart_update']);
+Route::post('/cart/cart_update/{id}', [ApiCart::class, 'cart_update']);
 
 // !!Routes For Authanticated Users
 Route::middleware('auth:sanctum')->group(function () {

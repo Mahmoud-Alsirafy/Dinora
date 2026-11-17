@@ -29,10 +29,6 @@ class ApiCart extends Controller
     }
     public function store_item(Request $request)
     {
-        $validated = $request->validate([
-            'variant_id' => 'required|exists:product_variants,id',
-            'quantity' => 'required|integer|min:1',
-        ]);
         $data = $this->cartService->addItem($request);
         return response()->json([
             'data' => $data,
@@ -40,9 +36,9 @@ class ApiCart extends Controller
         ], 200);
     }
 
-    public function cart_update(Request $request)
+    public function cart_update(Request $request, $id)
     {
-        $data = $this->cartService->updateItem($request);
+        $data = $this->cartService->updateItem($request, $id);
         return response()->json([
             'data' => $data,
             'message' => 'Item updated to cart successfully',

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ProductVariant;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -127,10 +128,9 @@ class CartService
         );
     }
 
-    public function updateItem(Request $request)
+    public function updateItem(Request $request, $id)
     {
         $validated = $request->validate([
-            'item_id' => 'required|integer|exists:product_variants,id',
             'quantity' => 'required|integer|min:1',
         ]);
 
@@ -140,11 +140,11 @@ class CartService
 
         return $this->withCartLocks(
             [$cacheKey],
-            function () use ($cacheKey, $context, $validated) {
+            function () use ($cacheKey, $context, $validated, $id) {
 
                 $cart = Cache::get($cacheKey, []);
-
-                $itemId = $validated['item_id'];
+                $variant  = ProductVariant::findOrFail($id);
+                $itemId = $variant->id;
 
                 if (!isset($cart[$itemId])) {
                     abort(404, 'Item not found in cart');
