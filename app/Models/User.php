@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Addresses;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -56,5 +57,10 @@ class User extends Authenticatable
     public function merchantProfile(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(MerchantProfiel::class, 'mer_id');
+    }
+
+    public function addresses()
+    {
+        return $this->hasMany(Addresses::class);
     }
 }
