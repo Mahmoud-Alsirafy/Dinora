@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Add\AddressController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Cart\ApiCart;
 use App\Http\Controllers\Api\Cate\Categories;
@@ -31,4 +32,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         // return $request->user();
     });
+
+    // !! Address Routes
+
+    // ?? store new addr
+    Route::post('/address', [AddressController::class, 'store']);
+    // ?? show the addrs
+    Route::get('/show_address', [AddressController::class, 'index']);
+    // ?? set default addrs
+    Route::post('/default_address/{id}', [AddressController::class, 'set_default']);
+    // ?? show address info
+    Route::post('/show_address_info/{id}', [AddressController::class, 'show']);
+    // ?? update address
+    Route::post('/update_address/{id}', [AddressController::class, 'update']);
+    // ?? delete address
+    Route::delete('/delete_address/{id}', [AddressController::class, 'delete']);
 });

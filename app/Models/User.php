@@ -3,7 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Models\Addresses;
+use App\Models\Address;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -61,6 +61,6 @@ class User extends Authenticatable
 
     public function addresses()
     {
-        return $this->hasMany(Addresses::class);
+        return $this->hasMany(Address::class);
     }
 }
