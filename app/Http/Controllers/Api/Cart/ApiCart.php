@@ -41,7 +41,15 @@ class ApiCart extends Controller
         $data = $this->cartService->updateItem($request, $id);
         return response()->json([
             'data' => $data,
-            'message' => 'Item updated to cart successfully',
+            'message' => 'Item quantity updated successfully',
+        ], 200);
+    }
+    public function cart_remove(Request $request, $id)
+    {
+        $data = $this->cartService->removeItem($request, $id);
+        return response()->json([
+            'data' => $data,
+            'message' => 'Item removed from cart successfully',
         ], 200);
     }
 }

@@ -175,7 +175,7 @@ class CartService
         $cartToken = $request->header('X-Cart-Token');
 
         if (empty($cartToken)) {
-            return false;
+            return 'should send Cart-Token';
         }
 
         $userKey = "cart_user_{$user->id}";
@@ -189,7 +189,7 @@ class CartService
                 $guestCart = Cache::get($guestKey, []);
 
                 if (empty($guestCart)) {
-                    return false;
+                    return "no guest cart";
                 }
 
                 foreach ($guestCart as $key => $value) {
@@ -213,6 +213,34 @@ class CartService
                 Cache::forget($guestKey);
 
                 return true;
+            }
+        );
+    }
+    public function removeItem(Request $request, $id)
+    {
+        $context = $this->resolveCart($request);
+
+        $cacheKey = $context['cache_key'];
+
+        return $this->withCartLocks(
+            [$cacheKey],
+            function () use ($cacheKey, $context, $id) {
+                $cart = Cache::get($cacheKey, []);
+                $variant = ProductVariant::findOrFail($id);
+                $itemId = $variant->id;
+                if (!isset($cart[$itemId])) {
+                    abort(404, 'Item not found in cart');
+                }
+                unset($cart[$itemId]);
+                $saved = Cache::put($cacheKey, $cart, now()->addDays(self::CART_TTL));
+                if (!$saved) {
+                    throw new \RuntimeException('Failed to remove item from cart');
+                }
+
+                return [
+                    'cart' => $cart,
+                    'cart_token' => $context['cart_token'],
+                ];
             }
         );
     }

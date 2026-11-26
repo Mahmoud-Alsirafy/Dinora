@@ -22,7 +22,8 @@ Route::get('/variant/{sku}', [ApiVariants::class, 'show']);
 
 Route::get('/cart', [ApiCart::class, 'index']);
 Route::post('/cart/store_item', [ApiCart::class, 'store_item']);
-Route::post('/cart/cart_update/{id}', [ApiCart::class, 'cart_update']);
+Route::PATCH('/cart/cart_update/{id}', [ApiCart::class, 'cart_update']);
+Route::delete('/cart/cart_remove/{id}', [ApiCart::class, 'cart_remove']);
 
 // !!Routes For Authanticated Users
 Route::middleware('auth:sanctum')->group(function () {
